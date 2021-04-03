@@ -1,7 +1,12 @@
-/* Example sketch/program showing An Arduino Door Access Control featuring RFID, EEPROM, Relay
+/* Example sketch/program showing An Arduino Ignition Control featuring RFID, EEPROM, Relay. 
+An RFID tag replaces the motorbike key for the ignition
+video available on youtube: xxx
    -------------------------------------------------------------------------------------------
-   This is a MFRC522 library example; for further details and other examples see: https://github.com/miguelbalboa/rfid
-   Simple Work Flow (not limited to) :
+   This code is based on the work of miguelbalboa; This is a MFRC522 library example; for further details and other examples of the original code see: https://github.com/miguelbalboa/rfid
+   
+This motoduino version is availbale on https://github.com/jlstoefs/Motoduino-RFID-to-Relay-Board
+ 
+ Simple Work Flow (not limited to) :
   +----------------------------------->READ TAGS+^------------------------------------------+
   |                              +--------------------+                                     |
   |                              |                    |                                     |
@@ -38,6 +43,7 @@
    SPI MOSI    MOSI         11 / ICSP-4   51        D11        ICSP-4           16
    SPI MISO    MISO         12 / ICSP-1   50        D12        ICSP-1           14
    SPI SCK     SCK          13 / ICSP-3   52        D13        ICSP-3           15
+
 */
 #include <EEPROM.h>     // We are going to read and write PICC's UIDs from/to EEPROM
 #include <SPI.h>        // RC522 Module uses SPI protocol
