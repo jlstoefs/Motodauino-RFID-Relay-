@@ -1,4 +1,4 @@
-/* Example sketch/program showing An Arduino Door Access Control featuring RFID, EEPROM, Relay
+/* Example sketch/program showing An Arduino Relay Control featuring RFID, EEPROM, Relay
    -------------------------------------------------------------------------------------------
    This is a MFRC522 library example; for further details and other examples see: https://github.com/miguelbalboa/rfid
    Simple Work Flow (not limited to) :
@@ -40,6 +40,7 @@
    SPI SCK     SCK          13 / ICSP-3   52        D13        ICSP-3           15
 
 https://github.com/jlstoefs/Motoduino-RFID-to-Relay-Board
+Contact jlstoefs@gmail.com for printed PCB Board
 */
 #include <EEPROM.h>     // We are going to read and write PICC's UIDs from/to EEPROM
 #include <SPI.h>        // RC522 Module uses SPI protocol
