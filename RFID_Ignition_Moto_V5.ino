@@ -1,4 +1,4 @@
-/* Example sketch/program showing An Arduino Relay Control featuring RFID, EEPROM, Relay
+/* Example sketch/program showing An Arduino Access Control featuring RFID, EEPROM, Relay
    -------------------------------------------------------------------------------------------
    This is a MFRC522 library example; for further details and other examples see: https://github.com/miguelbalboa/rfid
    Simple Work Flow (not limited to) :
@@ -21,11 +21,9 @@
   +-------+EXIT|     |DELETE FROM|     |ADD TO|             |                               |
           +----+     |  EEPROM   |     |EEPROM|             |                               |
                      +-----------+     +------+             +-------------------------------+
-   Use a Master Card which act as Programmer then you can able to choose card holders who will granted access or not
-
- * **Easy User Interface** Just one RFID tag needed whether Delete or Add Tags.
- * **Stores Information on EEPROM** Information stored on non volatile Arduino's EEPROM memory to preserve Key cards' tag and Master Card. EEPROM has unlimited Read cycle but roughly 100,000 limited Write cycle.
- * **Security** To keep it simple we are going to use Tag's Unique IDs. It's simple and not hacker proof.
+ **Easy User Interface** Just one RFID tag (Master Card) needed to enter Program Mode and allow to Add/Delete RFID Tags (keys) who will granted access or not
+ **Stores Information on Arduino's EEPROM memory (non volatile memory) to preserve Key cards' tag and Master Card after reboot. EEPROM has unlimited Read cycle but roughly 100,000 limited Write cycle.
+ **Security** we use Tag's Unique IDs. It's simple and not hacker proof.
 
    Typical RFID reader pin layout used:
    -----------------------------------------------------------------------------------------
@@ -40,47 +38,48 @@
    SPI SCK     SCK          13 / ICSP-3   52        D13        ICSP-3           15
 
 https://github.com/jlstoefs/Motoduino-RFID-to-Relay-Board
-Contact jlstoefs@gmail.com for printed PCB Board
-*/
-#include <EEPROM.h>     // We are going to read and write PICC's UIDs from/to EEPROM
-#include <SPI.h>        // RC522 Module uses SPI protocol
+https://youtu.be/XbTQFPwO5q4 to see implementation
+Contact jlstoefs@gmail.com to order an Arduino Nano compatible RFID PCB Board*/
+//Libraries
+#include <EEPROM.h>     // required to read / write tags' UIDs from/to EEPROM
+#include <SPI.h>        // SPI protocol to access RC522 Module
 #include <MFRC522.h>  // Library for Mifare RC522 Devices
 
-#define LED_ON HIGH
-#define LED_OFF LOW
-//Select the desired ignition connection to the relay (normally closed - NC,  or normally open - NO):
-#define IGNITION_NC  //comment if ignition wires are connected on normally open pins of the relay
-/* connection ignition wires to NC pins of the relay is safer to ride (in case of trouble, ignition stays on in case of arduino failure) but requires a diode in case physical keyv is still used
-   Connection ignition wires to NO pins of the relay is safer against theft as relay must be powered in order for the engine to start /ride the bike
-NB: NC is only acceptable if the ignition wire is energezed by the same wires as the arduino, and will require a diode on the ignition wire to avoid arduino being reverse powered by ignition wire in case of use of physica key;
-without diode, the live ignition wire would power on arduino (due to NC connection), which  would trigger the relay to NO, which will power off the arduino,triggering relay to NC, and cycle would repeat, killing the relay*/ 
+//#define IGNITION_NC  //comment if ignition wires are connected on normally open pins of the relay
+/*Select the desired ignition connection to the relay (normally closed - NC,  or normally open - NO):
+connection ignition wires to NC pins of the relay is safer to ride (in case of trouble, ignition stays on in case of arduino failure) but requires a diode in case physical key is still used
+Connection ignition wires to NO pins of the relay is safer against theft as relay must be powered in order for the engine to start /ride the bike
+NB: NC is only acceptable if the ignition wire is energized by the same wires as the arduino, and will require a diode on the ignition wire to avoid arduino being reverse powered by ignition wire in case of use of physical key;
+without diode, the live ignition wire would power on arduino (due to NC connection), which would trigger the relay to NO, which will power off the arduino,triggering relay to NC, and cycle would repeat, killing the relay*/ 
 #ifdef IGNITION_NC
 #define RELAY_INIT LOW //etat de demarrage du relay; pour la securité, le demarreur fonctionne avec le relay hors tension (les fils du dearreur doivent etre reliés sur la position NC)
 #else
 #define RELAY_INIT HIGH //etat de demarrage du relay; pour la securité, le demarreur fonctionne avec le relay hors tension (les fils du dearreur doivent etre reliés  sur la position NC)
 #endif
-// defining constants; Pins; 3/5/6/9/10 are PWM pins on arduino EVERY; led pins must be PWM pins
+
+// defining constants
 #define relay 4       // Set Relay Pin
 #define wipeB 7       // Button pin for WipeMode
-    #define BeepPin 2 //Beeper pin
-// Create MFRC522 instance.
+#define BeepPin 2 //Beeper pin
 #define SS_PIN 10
 #define RST_PIN 9
-MFRC522 mfrc522(SS_PIN, RST_PIN);
+int LedPinsGBR[]={3,5,6}; //Green, Blue and Red led pins; must be PWM pins;  Pins; 3/5/6/9/10 are PWM pins on arduino EVERY; 
+
 // defining global variables
-int LedPinsGBR[]={3,5,6}; //Green, Blue and Red led pins; must be PWM pins
 bool successRead;    // Variable integer to keep if we have Successful Read from Reader
 byte storedCard[4];   // Stores an ID read from EEPROM
 byte readCard[4];   // Stores scanned ID read from RFID Module
 byte masterCard[4];   // Stores master card's ID read from EEPROM
 byte LedLoop=0; //used in program mode to loop the 3 leds without delay
 byte ToggleRelay=RELAY_INIT;    // Initial Relay state 
+
+MFRC522 mfrc522(SS_PIN, RST_PIN); // Create MFRC522 instance.
 ///////////////////////////////////////// Setup ///////////////////////////////////
 void setup() {
   
-  pinMode(relay, OUTPUT); // relay must be initialized very early in programm as relay not powered allows bike to start (security feature: if no current, bike must continue operating)
-  digitalWrite(relay, RELAY_INIT);                            // if IGNITION_NC is selected, bike could start if arduino is off ==> at initilisation, relay must switch to NO.
-  pinMode(wipeB, INPUT_PULLUP);                               // Enable pin's pull up resistor for button 
+  pinMode(relay, OUTPUT);
+  digitalWrite(relay, RELAY_INIT); // if IGNITION_NC is selected, bike could start when arduino is off (security feature: if no arduino current failure, bike must continue operating)==> relay must be initialized very early in programm 
+  pinMode(wipeB, INPUT_PULLUP);    // Enable pin's pull up resistor for button 
   pinMode (BeepPin,OUTPUT);
   for (int i=0;i<3;i++) pinMode (LedPinsGBR [i],OUTPUT);     // define pinMode OUTPUT for Leds 
  
@@ -92,26 +91,27 @@ void setup() {
   Serial.println(F("---------------------"));
   ShowReaderDetails();                              // Show details of PCD - MFRC522 Card Reader details
   Show_EEPROM_Usage();
-  for (int i=0; i<3; i++) FadeLoop(i,100,1);//FadeDelay(i,5);//FadeLoop(i,250,1);//
+  for (int i=0; i<3; i++) FadeLoop(i,100,1);
   if (digitalRead(wipeB) == LOW)                      //Wipe Code - If the Button (wipeB) Pressed for 10 sec while setup run (powered on), it wipes EEPROM
         {Serial.println(F("Wipe Button Pressed;all EEPROM data will be deleted in 5 seconds"));
-        bool buttonState = monitorWipeButton(5000);    // Give user enough time (5 sec) to cancel operation; if goes to the end, true is returned as buttonState
-        if (buttonState == true) Wipe_EEPROM(); // If button still be pressed, wipe EEPROM
-        else Serial.println(F("Wiping Cancelled"));     // if monitorWipebutton returns false
-        digitalWrite(LedPinsGBR[2], LED_OFF);                  //make sure red led is off
+        bool WipeState = monitorWipeButton(5000);    // Give user enough time (5 sec) to cancel operation; if goes to the end, true is returned as WipeState
+        if (WipeState == true) Wipe_EEPROM(); // If button still be pressed, wipe EEPROM
+        else digitalWrite(LedPinsGBR[2], LOW);           //turns off red led 
+        Serial.println(F("Wiping Cancelled"));     
         Serial.println(F("-------------------"));
       }
   // Check if master card defined, if not let user choose a master card; You keep other EEPROM records just write other than 143 to EEPROM address 1
-  if (EEPROM.read(1) != 143)                        // EEPROM address 1 should hold magical number which is '143'
+  if (EEPROM.read(1) != 143)                        // EEPROM address 1 should hold magical number '143'
         {Serial.println(F("No Master Card Defined"));
         Serial.println(F("Scan a card to define new Master Card"));
         do {
             successRead = getID();            // sets successRead to 1 when we get read from reader otherwise 0
             FadeLoop(1,200,1);
+            if( millis() % 600<200) digitalWrite (BeepPin,HIGH); else digitalWrite (BeepPin,LOW);//rapid beep to request new Maaster Tag
             }
         while (!successRead);                  // Program will not go further while you not get a successful read
     
-        for ( byte j = 0; j < 4; j++ ) EEPROM.update( 2 + j, readCard[j] );// Loop 4 times to get the 4 bytes; Write scanned PICC's UID to EEPROM, start from address 2 when j=0)
+        for ( byte j = 0; j < 4; j++ ) EEPROM.update( 2 + j, readCard[j] );// Loop 4 times to get the 4 bytes; Write scanned Tag's's UID to EEPROM slots 2 (j=0) to 5 (j=3)
         EEPROM.update(1, 143);                  // Write to EEPROM we defined Master Card.
         Serial.println(F("Master Card Defined"));
         Serial.println(F("-------------------"));
@@ -124,26 +124,27 @@ void setup() {
   Serial.println("");
   Serial.println(F("Setup completed; ready to scan"));
   Serial.println(F("----------------"));
-  digitalWrite(LedPinsGBR[2], LED_ON);//switch on red led
+  digitalWrite(LedPinsGBR[2], HIGH);//switch on red led as ignitions is off at the end of the Setup.
 }
 ///////////////////////////////////////// Main Loop ///////////////////////////////////
 void loop () {
 
 static boolean programMode = false;  // initialize programming mode to false
-static byte GreenLedStatus;     //should be boolean but not digitalWrite (x, TRUE) is not supported by arduino nano EVERY  
-
+static byte GreenLedStatus;     //should be boolean but digitalWrite (x, TRUE) is not supported by arduino nano EVERY  
+static byte RedLedStatus;       //should be boolean but digitalWrite (x, TRUE) is not supported by arduino nano EVERY  
   do  {
       successRead = getID();  // sets successRead to 1 when we get read from reader otherwise 0
       if (digitalRead(wipeB) == LOW)           // Check if button is pressed;  if wipe button pressed for 10 seconds initialize Master Card wiping
             {Serial.println(F("Wipe Button Pressed;Master card will be deleted in 5 seconds"));
-            bool buttonState = monitorWipeButton(5000); // Give user enough time to cancel operation
-            if (buttonState == true) // If button still be pressed, wipe EEPROM cell 1
+            bool WipeState = monitorWipeButton(5000); // Give user enough time to cancel operation
+            if (WipeState == true) // If button still be pressed, wipe EEPROM cell 1
                   {EEPROM.update(1, 0);                  // Reset Magic Number.
                   Serial.println(F("Master card erased"));
                   Serial.println(F("Please reset to re-program master card"));
+                  for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LOW); 
                   while (1)  //Dead end: loop stops here                     
-                      {for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LED_OFF); 
-                      FadeLoop(2,200,1);
+                      {FadeLoop(2,200,1);
+                      if( millis() % 400<200) digitalWrite (BeepPin,HIGH); else digitalWrite (BeepPin,LOW);
                       Serial.print(F("."));
                       }        
                   }
@@ -151,25 +152,25 @@ static byte GreenLedStatus;     //should be boolean but not digitalWrite (x, TRU
             }
       if (programMode) //program mode ==> flashing 3 leds + beep
                   {FadeLoop(LedLoop,100,0);
-                  if( millis() % 600<200) digitalWrite (BeepPin,HIGH);
-                  else digitalWrite (BeepPin,LOW);
+                  if( millis() % 600<200) digitalWrite (BeepPin,HIGH); else digitalWrite (BeepPin,LOW); //quick beeps to remind that we need Master Tag to exit programm mode
                   }
       else //
-                  {FadeLoop(1,1500,0); //add red led+++++++++++++++++
-                  if( ToggleRelay==RELAY_INIT && millis() % 2000<200) digitalWrite (BeepPin,HIGH);
+                  {FadeLoop(1,1000,0); //flashing orange led
+                  if( ToggleRelay==RELAY_INIT && millis() % 2000<200) digitalWrite (BeepPin,HIGH); //Slow beeps to remind that system is on and awaiting Key Tag
                   else digitalWrite (BeepPin,LOW);
                   }
       }  
   while (!successRead);   //the loop will stop here while we are NOT getting a successful read
 
-  if (programMode) 
+  if (programMode) //if a card is read while in program mode
         {
         if (isMaster(readCard) )  //When in program mode check First If master card scanned again to exit program mode
               {Serial.println(F("Hello Master - Exiting Program Mode"));
               Serial.println(F("----------------"));
               programMode = false;  //exit programMode
-              for (int i=0;i<3;i++) {digitalWrite(LedPinsGBR [i],LED_OFF);}
+              for (int i=0;i<3;i++) {digitalWrite(LedPinsGBR [i],LOW);}
               digitalWrite(LedPinsGBR[0], GreenLedStatus); 
+              digitalWrite(LedPinsGBR[2], RedLedStatus); 
               return; //recommence au début du loop et ne va pas plus loin
               }
         else  {        //if a Key card is read
@@ -179,16 +180,17 @@ static byte GreenLedStatus;     //should be boolean but not digitalWrite (x, TRU
                     }
               else                     // If scanned card is not known add it
                     {Serial.println(F("adding..."));
-                    writeID(readCard);       // Serial.println(F("Scan a PICC to ADD or REMOVE to EEPROM"));
+                    writeID(readCard);
                     }
               Show_EEPROM_Usage(); 
-              Serial.println(F("Scan a card to ADD or REMOVE to EEPROM"));
+              Serial.println(F("Scan a Keycard to ADD or REMOVE to EEPROM"));
               }
         }
-  else  { // NormalMode
+  else  { // if a card is read while in NormalMode:
         if (isMaster(readCard))     // If scanned card's ID matches Master Card's ID - enter program mode
               {programMode = true;
               GreenLedStatus=digitalRead(LedPinsGBR[0]);
+              RedLedStatus=digitalRead(LedPinsGBR[2]);
               Serial.println(F("Hello Master - Entering Program Mode"));
               Serial.println(F("----------------"));
               uint8_t count = EEPROM.read(0);   // Read the first Byte of EEPROM that
@@ -229,13 +231,13 @@ void SwitchRelay () {
  Serial.println(ToggleRelay);
  if (ToggleRelay==RELAY_INIT) 
       {Serial.println(F("Engine CUT OFF"));
-      digitalWrite(LedPinsGBR[0], LED_OFF);//switch off green led
-      digitalWrite(LedPinsGBR[2], LED_ON);//switch on red led
+      digitalWrite(LedPinsGBR[0], LOW);//switch off green led
+      digitalWrite(LedPinsGBR[2], HIGH);//switch on red led
       }
  else 
       {Serial.println(F("Engine ON"));
-       digitalWrite(LedPinsGBR[0], LED_ON); //switch on green led
-       digitalWrite(LedPinsGBR[2], LED_OFF);//switch off red led
+       digitalWrite(LedPinsGBR[0], HIGH); //switch on green led
+       digitalWrite(LedPinsGBR[2], LOW);//switch off red led
       }
 }
 
@@ -283,9 +285,9 @@ void writeID( byte a[] ) {
         num++;
         EEPROM.update( 0, num );     //  Increment the counter by one & Write the new count to the counter
         for ( uint8_t j = 0; j < 4; j++ ) EEPROM.update( startbyte + j, a[j] );  // Write the array values to EEPROM in the right position
-        for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LED_OFF); //turns all leds off
-        digitalWrite(LedPinsGBR [0],LED_ON);
-        delay(400); //delay to betetr hear the beep
+        for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LOW); //turns all leds off
+        digitalWrite(LedPinsGBR [0],HIGH);
+        delay(400); //delay to better hear the beep
         for (int i=0;i<3;i++) 
           { digitalWrite (BeepPin,HIGH); 
             delay(50);
@@ -293,7 +295,7 @@ void writeID( byte a[] ) {
             delay(50);
           }
         delay(300);
-        digitalWrite(LedPinsGBR [0],LED_OFF);
+        digitalWrite(LedPinsGBR [0],LOW);
         Serial.print(F("card ID added to EEPROM; on slot"));
         Serial.println(num);
 }
@@ -304,7 +306,7 @@ void deleteID( byte a[] ) {
         uint8_t slot= findIDSLOT( a );      // Figure out the slot number of the card  
         const uint8_t looping = ((num - slot) * 4); // the number of bytes used to store Key cards located in EEPROM AFTER the card to be deleted, and which will need to be shifted by 4 bytes 
         uint8_t startByte = ( (slot-1) * 4 ) + 6;      // first EEPROM location of card to be deleted
-        for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LED_OFF); 
+        for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LOW); 
         EEPROM.update( 0, num-1 );   // Write the new nbr of Key cards (i.e. old nbr-1) in EEPROM 0
         for ( byte k = 0; k < 4; k++ )                                              //JL code: only shift location between card to be deleted and the last Key card in the EEPROM
             {EEPROM.update( startByte + k, EEPROM.read(startByte + looping + k));   //JL replacing the card to be deleted with the last card
@@ -369,7 +371,7 @@ byte CountDown=interval/freq; //printing CountDown to reset
 
 uint32_t now = (uint32_t)millis();
 while ((uint32_t)millis() - now < interval)  
-        {if((uint32_t)millis() - now > interval/2) Ledfreq=freq/4; //LedPinsGBR[2] clignotte 4x plus vite dans la seconde moitié
+        {if((uint32_t)millis() - now > interval/2) Ledfreq=freq/4; // clignotte 4x plus vite dans la seconde moitié
         prevModulo=Modulo;
         Modulo=millis()% freq;
         FadeLoop(2,Ledfreq,0);//FadeLoop(2,Ledfreq,0);
@@ -428,6 +430,5 @@ void FadeLoop (int GBR,int PulseLength, byte Repeat) { //Led pulsing; GBR is the
         analogWrite(LedPinsGBR[GBR],LedValue+LedToggle*(Brightness-2*LedValue)); 
         } 
   while (Count<(2*Repeat)); //Loop if cycle>0
-  LedLoop = LedLoop%3; //makes sure OneTwoThree stays between 0 & 3
+  LedLoop = LedLoop%3; //makes sure LedLoop stays between 0 & 2
 }
-
