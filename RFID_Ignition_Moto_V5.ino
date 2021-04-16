@@ -106,8 +106,8 @@ void setup() {
         Serial.println(F("Scan a card to define new Master Card"));
         do {
             successRead = getID();            // sets successRead to 1 when we get read from reader otherwise 0
-            FadeLoop(1,200,1);
-            if( millis() % 600<200) digitalWrite (BeepPin,HIGH); else digitalWrite (BeepPin,LOW);//rapid beep to request new Maaster Tag
+            FadeLoop(1,200,0);
+            if (millis()%600<200) digitalWrite(BeepPin, HIGH); else digitalWrite(BeepPin, LOW); 
             }
         while (!successRead);                  // Program will not go further while you not get a successful read
     
@@ -130,12 +130,13 @@ void setup() {
 void loop () {
 
 static boolean programMode = false;  // initialize programming mode to false
-static byte GreenLedStatus;     //should be boolean but digitalWrite (x, TRUE) is not supported by arduino nano EVERY  
-static byte RedLedStatus;       //should be boolean but digitalWrite (x, TRUE) is not supported by arduino nano EVERY  
+//static byte GreenLedStatus;     //should be boolean but digitalWrite (x, TRUE) is not supported by arduino nano EVERY  
+
   do  {
       successRead = getID();  // sets successRead to 1 when we get read from reader otherwise 0
       if (digitalRead(wipeB) == LOW)           // Check if button is pressed;  if wipe button pressed for 10 seconds initialize Master Card wiping
             {Serial.println(F("Wipe Button Pressed;Master card will be deleted in 5 seconds"));
+
             bool WipeState = monitorWipeButton(5000); // Give user enough time to cancel operation
             if (WipeState == true) // If button still be pressed, wipe EEPROM cell 1
                   {EEPROM.update(1, 0);                  // Reset Magic Number.
@@ -143,8 +144,8 @@ static byte RedLedStatus;       //should be boolean but digitalWrite (x, TRUE) i
                   Serial.println(F("Please reset to re-program master card"));
                   for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LOW); 
                   while (1)  //Dead end: loop stops here                     
-                      {FadeLoop(2,200,1);
-                      if( millis() % 400<200) digitalWrite (BeepPin,HIGH); else digitalWrite (BeepPin,LOW);
+                      {FadeLoop(2,200,0);
+                      if (millis()%600<200) digitalWrite(BeepPin, HIGH); else digitalWrite(BeepPin, LOW); 
                       Serial.print(F("."));
                       }        
                   }
@@ -154,10 +155,15 @@ static byte RedLedStatus;       //should be boolean but digitalWrite (x, TRUE) i
                   {FadeLoop(LedLoop,100,0);
                   if( millis() % 600<200) digitalWrite (BeepPin,HIGH); else digitalWrite (BeepPin,LOW); //quick beeps to remind that we need Master Tag to exit programm mode
                   }
-      else //
+      else // awaitning a tag
                   {FadeLoop(1,1000,0); //flashing orange led
                   if( ToggleRelay==RELAY_INIT && millis() % 2000<200) digitalWrite (BeepPin,HIGH); //Slow beeps to remind that system is on and awaiting Key Tag
-                  else digitalWrite (BeepPin,LOW);
+                  else digitalWrite (BeepPin,LOW); 
+                   if(ToggleRelay==RELAY_INIT )  //make sure either a red or green led is on
+                        digitalWrite(LedPinsGBR [2],HIGH); 
+                   else {digitalWrite(LedPinsGBR [2],LOW); 
+                        digitalWrite(LedPinsGBR [0],HIGH);
+                        } 
                   }
       }  
   while (!successRead);   //the loop will stop here while we are NOT getting a successful read
@@ -169,8 +175,6 @@ static byte RedLedStatus;       //should be boolean but digitalWrite (x, TRUE) i
               Serial.println(F("----------------"));
               programMode = false;  //exit programMode
               for (int i=0;i<3;i++) {digitalWrite(LedPinsGBR [i],LOW);}
-              digitalWrite(LedPinsGBR[0], GreenLedStatus); 
-              digitalWrite(LedPinsGBR[2], RedLedStatus); 
               return; //recommence au début du loop et ne va pas plus loin
               }
         else  {        //if a Key card is read
@@ -189,8 +193,6 @@ static byte RedLedStatus;       //should be boolean but digitalWrite (x, TRUE) i
   else  { // if a card is read while in NormalMode:
         if (isMaster(readCard))     // If scanned card's ID matches Master Card's ID - enter program mode
               {programMode = true;
-              GreenLedStatus=digitalRead(LedPinsGBR[0]);
-              RedLedStatus=digitalRead(LedPinsGBR[2]);
               Serial.println(F("Hello Master - Entering Program Mode"));
               Serial.println(F("----------------"));
               uint8_t count = EEPROM.read(0);   // Read the first Byte of EEPROM that
