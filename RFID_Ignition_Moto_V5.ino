@@ -24,7 +24,7 @@
  **Easy User Interface** Just one RFID tag (Master Card) needed to enter Program Mode and allow to Add/Delete RFID Tags (keys) who will granted access or not
  **Stores Information on Arduino's EEPROM memory (non volatile memory) to preserve Key cards' tag and Master Card after reboot. EEPROM has unlimited Read cycle but roughly 100,000 limited Write cycle.
  **Security** we use Tag's Unique IDs. It's simple and not hacker proof.
-
+ *
    Typical RFID reader pin layout used:
    -----------------------------------------------------------------------------------------
                MFRC522      Arduino       Arduino   Arduino    Arduino          Arduino
@@ -40,6 +40,7 @@
 https://github.com/jlstoefs/Motoduino-RFID-to-Relay-Board
 https://youtu.be/XbTQFPwO5q4 to see implementation
 Contact jlstoefs@gmail.com to order an Arduino Nano compatible RFID PCB Board*/
+
 //Libraries
 #include <EEPROM.h>     // required to read / write tags' UIDs from/to EEPROM
 #include <SPI.h>        // SPI protocol to access RC522 Module
@@ -56,22 +57,23 @@ without diode, the live ignition wire would power on arduino (due to NC connecti
 #else
 #define RELAY_INIT HIGH //etat de demarrage du relay; pour la securité, le demarreur fonctionne avec le relay hors tension (les fils du dearreur doivent etre reliés  sur la position NC)
 #endif
-
 // defining constants
 #define relay 4       // Set Relay Pin
 #define wipeB 7       // Button pin for WipeMode
 #define BeepPin 2 //Beeper pin
 #define SS_PIN 10
 #define RST_PIN 9
-int LedPinsGBR[]={3,5,6}; //Green, Blue and Red led pins; must be PWM pins;  Pins; 3/5/6/9/10 are PWM pins on arduino EVERY; 
-
+#define Led_G 3 //Green led pin; must be PWM pin;  Pins; 3/5/6/9/10 are PWM pins on arduino EVERY; 
+#define Led_B 5 //Blue led pin; must be PWM pin;  Pins; 3/5/6/9/10 are PWM pins on arduino EVERY; 
+#define Led_R 6 //Red led pin; must be PWM pin;  Pins; 3/5/6/9/10 are PWM pins on arduino EVERY; 
+byte LedPinsGBR[]={Led_G,Led_B,Led_R}; 
 // defining global variables
-bool successRead;    // Variable integer to keep if we have Successful Read from Reader
+bool successRead;    // boolean to keep if we have Successful Read from Reader
 byte storedCard[4];   // Stores an ID read from EEPROM
 byte readCard[4];   // Stores scanned ID read from RFID Module
 byte masterCard[4];   // Stores master card's ID read from EEPROM
 byte LedLoop=0; //used in program mode to loop the 3 leds without delay
-byte ToggleRelay=RELAY_INIT;    // Initial Relay state 
+bool ToggleRelay=RELAY_INIT;    // Initial Relay state 
 
 MFRC522 mfrc522(SS_PIN, RST_PIN); // Create MFRC522 instance.
 ///////////////////////////////////////// Setup ///////////////////////////////////
@@ -81,24 +83,24 @@ void setup() {
   digitalWrite(relay, RELAY_INIT); // if IGNITION_NC is selected, bike could start when arduino is off (security feature: if no arduino current failure, bike must continue operating)==> relay must be initialized very early in programm 
   pinMode(wipeB, INPUT_PULLUP);    // Enable pin's pull up resistor for button 
   pinMode (BeepPin,OUTPUT);
-  for (int i=0;i<3;i++) pinMode (LedPinsGBR [i],OUTPUT);     // define pinMode OUTPUT for Leds 
+  for (byte i=0;i<3;i++) pinMode (LedPinsGBR [i],OUTPUT);     // define pinMode OUTPUT for Leds 
  
   Serial.begin(57600);                               // Initialize serial communications with PC
   SPI.begin();                                      // MFRC522 Hardware uses SPI protocol
   mfrc522.PCD_Init();                               // Initialize MFRC522 Hardware
   //mfrc522.PCD_SetAntennaGain(mfrc522.RxGain_max);  //If you set Antenna Gain to Max it will increase reading distance
   Serial.println(F("RFID_Ignition_Moto_V5"));     // sketch name
-  Serial.println(F("---------------------"));
+  DrawLine(); 
   ShowReaderDetails();                              // Show details of PCD - MFRC522 Card Reader details
   Show_EEPROM_Usage();
-  for (int i=0; i<3; i++) FadeLoop(i,100,1);
+  for (byte i=0; i<3; i++) FadeLoop(i,100,1);
   if (digitalRead(wipeB) == LOW)                      //Wipe Code - If the Button (wipeB) Pressed for 10 sec while setup run (powered on), it wipes EEPROM
         {Serial.println(F("Wipe Button Pressed;all EEPROM data will be deleted in 5 seconds"));
         bool WipeState = monitorWipeButton(5000);    // Give user enough time (5 sec) to cancel operation; if goes to the end, true is returned as WipeState
         if (WipeState == true) Wipe_EEPROM(); // If button still be pressed, wipe EEPROM
         else digitalWrite(LedPinsGBR[2], LOW);           //turns off red led 
         Serial.println(F("Wiping Cancelled"));     
-        Serial.println(F("-------------------"));
+        DrawLine(); 
       }
   // Check if master card defined, if not let user choose a master card; You keep other EEPROM records just write other than 143 to EEPROM address 1
   if (EEPROM.read(1) != 143)                        // EEPROM address 1 should hold magical number '143'
@@ -113,57 +115,53 @@ void setup() {
     
         for ( byte j = 0; j < 4; j++ ) EEPROM.update( 2 + j, readCard[j] );// Loop 4 times to get the 4 bytes; Write scanned Tag's's UID to EEPROM slots 2 (j=0) to 5 (j=3)
         EEPROM.update(1, 143);                  // Write to EEPROM we defined Master Card.
-        Serial.println(F("Master Card Defined"));
-        Serial.println(F("-------------------"));
+        Serial.println(F("Master card Defined"));
+        DrawLine(); 
         }
-  Serial.println(F("Master Card's UID"));
+  Serial.print(F("Master card's UID: "));
   for ( byte i = 0; i < 4; i++ )           // Read Master Card's UID from EEPROM
         {masterCard[i] = EEPROM.read(2 + i);    // print masterCard
         Serial.print(masterCard[i], HEX);
         }
   Serial.println("");
-  Serial.println(F("Setup completed; ready to scan"));
-  Serial.println(F("----------------"));
+  Serial.println(F("Setup completed"));
+  DrawLine(); 
   digitalWrite(LedPinsGBR[2], HIGH);//switch on red led as ignitions is off at the end of the Setup.
 }
 ///////////////////////////////////////// Main Loop ///////////////////////////////////
 void loop () {
 
-static boolean programMode = false;  // initialize programming mode to false
-//static byte GreenLedStatus;     //should be boolean but digitalWrite (x, TRUE) is not supported by arduino nano EVERY  
+static boolean programMode = false;  // initialize programming mode to false 
 
   do  {
       successRead = getID();  // sets successRead to 1 when we get read from reader otherwise 0
       if (digitalRead(wipeB) == LOW)           // Check if button is pressed;  if wipe button pressed for 10 seconds initialize Master Card wiping
             {Serial.println(F("Wipe Button Pressed;Master card will be deleted in 5 seconds"));
-
             bool WipeState = monitorWipeButton(5000); // Give user enough time to cancel operation
             if (WipeState == true) // If button still be pressed, wipe EEPROM cell 1
                   {EEPROM.update(1, 0);                  // Reset Magic Number.
-                  Serial.println(F("Master card erased"));
-                  Serial.println(F("Please reset to re-program master card"));
-                  for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LOW); 
+                  Serial.println(F("Master card erased;Reset to re-program master card"));
+                  DrawLine(); 
+                  for (byte i=0;i<2;i++) digitalWrite (LedPinsGBR [i],LOW); //shuts down all Leds
+                  digitalWrite(BeepPin, HIGH); //continuous beep to reset arduino
                   while (1)  //Dead end: loop stops here                     
                       {FadeLoop(2,200,0);
-                      if (millis()%600<200) digitalWrite(BeepPin, HIGH); else digitalWrite(BeepPin, LOW); 
-                      Serial.print(F("."));
                       }        
                   }
-            Serial.println(F("Master card erase cancelled"));
+            Serial.println(F("cancelled"));
             }
+            
       if (programMode) //program mode ==> flashing 3 leds + beep
                   {FadeLoop(LedLoop,100,0);
-                  if( millis() % 600<200) digitalWrite (BeepPin,HIGH); else digitalWrite (BeepPin,LOW); //quick beeps to remind that we need Master Tag to exit programm mode
-                  }
-      else // awaitning a tag
+                  if( millis() % 600<200) digitalWrite (BeepPin,HIGH); else digitalWrite (BeepPin,LOW); }//quick beeps to remind that we need Master Tag to exit programm mode
+      else // scan mode: awaiting a tag
                   {FadeLoop(1,1000,0); //flashing orange led
-                  if( ToggleRelay==RELAY_INIT && millis() % 2000<200) digitalWrite (BeepPin,HIGH); //Slow beeps to remind that system is on and awaiting Key Tag
-                  else digitalWrite (BeepPin,LOW); 
-                   if(ToggleRelay==RELAY_INIT )  //make sure either a red or green led is on
-                        digitalWrite(LedPinsGBR [2],HIGH); 
-                   else {digitalWrite(LedPinsGBR [2],LOW); 
-                        digitalWrite(LedPinsGBR [0],HIGH);
-                        } 
+                  if( ToggleRelay==RELAY_INIT && millis() % 2000<200) digitalWrite (BeepPin,HIGH); else digitalWrite (BeepPin,LOW); //When ignition is off,  beeps slowly to remind that system is on and awaiting Key Tag
+                  if( ToggleRelay==RELAY_INIT) 
+                        {digitalWrite(LedPinsGBR [2],HIGH); //switches on red led, switches off green led
+                        digitalWrite(LedPinsGBR [0],LOW);} 
+                  else {digitalWrite(LedPinsGBR [2],LOW); //switches on green led, switches off red led
+                        digitalWrite(LedPinsGBR [0],HIGH);} 
                   }
       }  
   while (!successRead);   //the loop will stop here while we are NOT getting a successful read
@@ -171,10 +169,10 @@ static boolean programMode = false;  // initialize programming mode to false
   if (programMode) //if a card is read while in program mode
         {
         if (isMaster(readCard) )  //When in program mode check First If master card scanned again to exit program mode
-              {Serial.println(F("Hello Master - Exiting Program Mode"));
-              Serial.println(F("----------------"));
+              {Serial.println(F("Exiting Program Mode"));
+              DrawLine(); 
               programMode = false;  //exit programMode
-              for (int i=0;i<3;i++) {digitalWrite(LedPinsGBR [i],LOW);}
+              for (byte i=0;i<3;i++) {digitalWrite(LedPinsGBR [i],LOW);}
               return; //recommence au début du loop et ne va pas plus loin
               }
         else  {        //if a Key card is read
@@ -187,69 +185,60 @@ static boolean programMode = false;  // initialize programming mode to false
                     writeID(readCard);
                     }
               Show_EEPROM_Usage(); 
-              Serial.println(F("Scan a Keycard to ADD or REMOVE to EEPROM"));
+              Serial.println(F("Awaiting Card..."));
               }
         }
   else  { // if a card is read while in NormalMode:
         if (isMaster(readCard))     // If scanned card's ID matches Master Card's ID - enter program mode
-              {programMode = true;
-              Serial.println(F("Hello Master - Entering Program Mode"));
-              Serial.println(F("----------------"));
-              uint8_t count = EEPROM.read(0);   // Read the first Byte of EEPROM that
+              {programMode = true; //entering program mode
+              Serial.println(F("Entering Program Mode"));
+              DrawLine(); 
+              byte count = EEPROM.read(0);   // 
               Show_EEPROM_Usage();
-              Serial.println(F("Scan a Key card to ADD or REMOVE to EEPROM"));
-              Serial.println(F("Scan Master card again to exit program mode"));
+              Serial.println(F("Scan a Key card to ADD to/REMOVE from EEPROM"));
+              Serial.println(F("Scan Master card to exit program mode"));
               }
         else {                          //if card is not MAster
               if ( findID(readCard) )   //see if the card is in the EEPROM
-                    {Serial.println(F("Access granted"));
+                    {Serial.println(F("Card OK"));
                     SwitchRelay();      // switch the relay
                     }
               else                    // If card is not in EEPROM, show that the ID was not valid
-                    {Serial.println(F("Access denied"));
-                    FadeLoop(2,100,5);//denied();
+                    {Serial.println(F("Unknown card"));
                     digitalWrite (BeepPin,HIGH); 
-                    delay(500);
+                    FadeLoop(2,100,5);//denied();
                     digitalWrite (BeepPin,LOW); 
                     }
               }
-    Serial.println(F("----------------"));
+    DrawLine(); 
         }
 }
 /////////////////////////////////////////  SwitchRelay (Relay+Leds) ///////////////////////////////////
 void SwitchRelay () {
-  
-// static byte ToggleRelay=RELAY_INIT;    // Initial Relay state 
 
- ToggleRelay = 1-ToggleRelay;                // invert for this run
+ ToggleRelay = !ToggleRelay;                // invert for this run
  digitalWrite(relay, ToggleRelay) ;        // Toggle LOW = relay sur NO (consomme de l'energie)
- for (int i=0;i<3;i++) 
+ for (byte i=0;i<3;i++) 
       {digitalWrite (BeepPin,HIGH); 
       delay(50);
       digitalWrite (BeepPin,LOW); 
       delay(50);
       }
- Serial.print(F("ToggleRelay="));
- Serial.println(ToggleRelay);
- if (ToggleRelay==RELAY_INIT) 
-      {Serial.println(F("Engine CUT OFF"));
-      digitalWrite(LedPinsGBR[0], LOW);//switch off green led
-      digitalWrite(LedPinsGBR[2], HIGH);//switch on red led
-      }
- else 
-      {Serial.println(F("Engine ON"));
-       digitalWrite(LedPinsGBR[0], HIGH); //switch on green led
-       digitalWrite(LedPinsGBR[2], LOW);//switch off red led
-      }
+ if (ToggleRelay==RELAY_INIT) Serial.println(F("Engine OFF"));      
+ else Serial.println(F("Engine ON"));
 }
+////////////////////////////////////////
+void DrawLine(){
 
+Serial.println(F("------------"));
+}
 ///////////////////////////////////////// boolean getID (0/1 + print ID number) ///////////////////////////////////
 bool getID() {
 
   if ( ! mfrc522.PICC_IsNewCardPresent()) return 0;     //If a new PICC placed to RFID reader
   if ( ! mfrc522.PICC_ReadCardSerial())   return 0;     //Since a PICC placed get Serial and continue   
   Serial.print(F("Card UID: "));
-  for ( uint8_t i = 0; i < 4; i++)   // There are Mifare PICCs which have 4 byte or 7 byte UID care;  we assume every PICC as they have 4 byte UID until we support 7 byte PICCs
+  for ( byte i = 0; i < 4; i++)   // There are Mifare PICCs which have 4 byte or 7 byte UID care;  we assume every PICC as they have 4 byte UID until we support 7 byte PICCs
           {readCard[i] = mfrc522.uid.uidByte[i];
           Serial.print(readCard[i], HEX);
           }
@@ -269,28 +258,28 @@ void ShowReaderDetails() { // Get the MFRC522 software version
   else                Serial.print(F(" unknown"));
   Serial.println("");
   if ((v == 0x00) || (v == 0xFF))   // When 0x00 or 0xFF is returned, communication probably failed
-      {Serial.println(F("WARNING: Communication failure;SYSTEM HALTED"));
+      {Serial.println(F("Communication failure;system halted"));
       while (true) FadeLoop(2,100,0); // dead end
       }
 }
 //////////////////////////////////////// readID ( Read ID from EEPROM ans store it in storeCard) //////////////////////////////
-void readID( uint8_t number ) {
+void readID( byte number ) {
   
-  uint8_t start = (number * 4 ) + 2;    // Figure out starting position
-  for ( uint8_t i = 0; i < 4; i++ ) storedCard[i] = EEPROM.read(start + i);   // Loop 4 times to get the 4 Bytes; Assign values read from EEPROM to array
+  byte start = (number * 4 ) + 2;    // Figure out starting position
+  for ( byte i = 0; i < 4; i++ ) storedCard[i] = EEPROM.read(start + i);   // Loop 4 times to get the 4 Bytes; Assign values read from EEPROM to array
 }
 ///////////////////////////////////////// writeID ( Add ID to EEPROM ) ///////////////////////////////////
 void writeID( byte a[] ) {
   
-        uint8_t num = EEPROM.read(0);     // Get the numer of used spaces, position 0 stores the number of ID cards
-        uint8_t startbyte = ( num * 4 ) + 6;  // Figure out where the next slot starts
+        byte num = EEPROM.read(0);     // Get the numer of used spaces, position 0 stores the number of ID cards
+        byte startbyte = ( num * 4 ) + 6;  // Figure out where the next slot starts
         num++;
         EEPROM.update( 0, num );     //  Increment the counter by one & Write the new count to the counter
-        for ( uint8_t j = 0; j < 4; j++ ) EEPROM.update( startbyte + j, a[j] );  // Write the array values to EEPROM in the right position
-        for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LOW); //turns all leds off
+        for ( byte j = 0; j < 4; j++ ) EEPROM.update( startbyte + j, a[j] );  // Write the array values to EEPROM in the right position
+        for (byte i=1;i<3;i++) digitalWrite (LedPinsGBR [i],LOW); //turns all leds off
         digitalWrite(LedPinsGBR [0],HIGH);
         delay(400); //delay to better hear the beep
-        for (int i=0;i<3;i++) 
+        for (byte k=0;k<3;k++) 
           { digitalWrite (BeepPin,HIGH); 
             delay(50);
             digitalWrite (BeepPin,LOW); 
@@ -298,45 +287,48 @@ void writeID( byte a[] ) {
           }
         delay(300);
         digitalWrite(LedPinsGBR [0],LOW);
-        Serial.print(F("card ID added to EEPROM; on slot"));
+        Serial.print(F("Key card added to EEPROM slot #"));
         Serial.println(num);
 }
 ///////////////////////////////////////// deleteID ( Remove ID from EEPROM )  ///////////////////////////////////
 void deleteID( byte a[] ) {
   
-        uint8_t num = EEPROM.read(0);   // Get the total number of Key cards, stored in EEPROM position 0
-        uint8_t slot= findIDSLOT( a );      // Figure out the slot number of the card  
-        const uint8_t looping = ((num - slot) * 4); // the number of bytes used to store Key cards located in EEPROM AFTER the card to be deleted, and which will need to be shifted by 4 bytes 
-        uint8_t startByte = ( (slot-1) * 4 ) + 6;      // first EEPROM location of card to be deleted
-        for (int i=0;i<3;i++) digitalWrite (LedPinsGBR [i],LOW); 
+        byte num = EEPROM.read(0);   // Get the total number of Key cards, stored in EEPROM position 0
+        byte slot= findIDSLOT( a );      // Figure out the slot number of the card  
+        const byte looping = ((num - slot) * 4); // the number of bytes used to store Key cards located in EEPROM AFTER the card to be deleted, and which will need to be shifted by 4 bytes 
+        byte startByte = ( (slot-1) * 4 ) + 6;      // first EEPROM location of card to be deleted
+        for (byte i=0;i<2;i++) digitalWrite (LedPinsGBR [i],LOW); //Shuts down leds Green & Blue
         EEPROM.update( 0, num-1 );   // Write the new nbr of Key cards (i.e. old nbr-1) in EEPROM 0
         for ( byte k = 0; k < 4; k++ )                                              //JL code: only shift location between card to be deleted and the last Key card in the EEPROM
             {EEPROM.update( startByte + k, EEPROM.read(startByte + looping + k));   //JL replacing the card to be deleted with the last card
             EEPROM.update( startByte + looping + k, 0);                             // JL deleting the last 4 bytes as they have been shifted
             }
          digitalWrite (BeepPin,HIGH);
-        FadeLoop(2,1000,1);
+         digitalWrite(LedPinsGBR [2],HIGH);
+        delay(1000);
          digitalWrite (BeepPin,LOW);
-        Serial.println(F("Succesfully removed ID record from EEPROM"));
+         digitalWrite(LedPinsGBR [2],LOW);
+        Serial.print(F("Key Card removed from EEPROM slot #"));
+        Serial.println(slot);
 }
 ///////////////////////////////////////// checkTwo (true/false)  ///////////////////////////////////
-boolean checkTwo ( byte a[], byte b[] ) {
+boolean checkTwo ( byte a[], byte b[] ) {   //compares 4 byts (2 by 2)
 
 boolean match = false;          // initialize card match to false
  if ( a[0] != 0 )      // Make sure there is something in the array first
     match = true;       // Assume they match at first
- for ( uint8_t k = 0; k < 4; k++ )    // Loop 4 times
-          {if ( a[k] != b[k] )     // IF a != b then set match = false, one fails, all fail
+ for ( byte i = 0; i < 4; i++ )    // Loop 4 times
+          {if ( a[i] != b[i] )     // IF a != b then set match = false, one fails, all fail
           match = false;
           }
  if ( match ) return true;        // Check to see if if match is still true
  else return false;
 }
 ///////////////////////////////////////// findIDSLOT (returns int)  ///////////////////////////////////
-uint8_t findIDSLOT( byte find[] ) {
+byte findIDSLOT( byte find[] ) {
   
- uint8_t count = EEPROM.read(0);       // Reads the number of Key cards in EEPROM 0
- for ( uint8_t i = 1; i <= count; i++ )     // Loop once for each EEPROM entry
+ byte count = EEPROM.read(0);       // Reads the number of Key cards in EEPROM 0
+ for ( byte i = 1; i <= count; i++ )     // Loop once for each EEPROM entry
     {readID(i);                // Read an ID from EEPROM, it is stored in storedCard[4]
     if ( checkTwo( find, storedCard ) )  // Check to see if the storedCard read from EEPROM is the same as the find[] ID card passed
          {return i;         // The slot number of the card
@@ -347,8 +339,8 @@ uint8_t findIDSLOT( byte find[] ) {
 ///////////////////////////////////////// boolean findID (true/false)   ///////////////////////////////////
 boolean findID( byte find[] ) {
   
-  uint8_t count = EEPROM.read(0);     // Reads the number of Key cards in EEPROM 0
-  for ( uint8_t i = 1; i <= count; i++ )     // Loop once for each EEPROM entry
+  byte count = EEPROM.read(0);     // Reads the number of Key cards in EEPROM 0
+  for ( byte i = 1; i <= count; i++ )     // Loop once for each EEPROM entry
         {readID(i);          // Read an ID from EEPROM, it is stored in storedCard[4]
         if ( checkTwo( find, storedCard ) ) return true;   // Check to see if the storedCard read from EEPROM
         }
@@ -363,20 +355,19 @@ boolean isMaster( byte test[] ) {
     return false;
 }
 ///////////////////////////////////////// boolean monitorWipeButton (true/false)  ///////////////////////////////////
-bool monitorWipeButton(uint32_t interval) {
+bool monitorWipeButton(unsigned long interval) {
   
 static int Modulo=0;
 static int prevModulo=0;
 const int freq=500;
 int Ledfreq=freq;
 byte CountDown=interval/freq; //printing CountDown to reset
-
-uint32_t now = (uint32_t)millis();
-while ((uint32_t)millis() - now < interval)  
-        {if((uint32_t)millis() - now > interval/2) Ledfreq=freq/4; // clignotte 4x plus vite dans la seconde moitié
+uint32_t now = millis();
+while (millis() - now < interval)  
+        {if(millis() - now > interval/2) Ledfreq=freq/4; // clignotte 4x plus vite dans la seconde moitié
         prevModulo=Modulo;
         Modulo=millis()% freq;
-        FadeLoop(2,Ledfreq,0);//FadeLoop(2,Ledfreq,0);
+        FadeLoop(2,Ledfreq,0);
         if (Modulo<prevModulo)        //each freq
                 {if (digitalRead(wipeB) == HIGH) return false; //exit
                 Serial.print(CountDown);   //compte a rebours
@@ -391,28 +382,28 @@ return true;
 void Wipe_EEPROM(){
   
  Serial.println(F("Starting Wiping EEPROM"));
- for (uint16_t x = 0; x < EEPROM.length(); x++) EEPROM.update(x,0);       //If EEPROM address 0, do nothing, already clear, go to the next address in order to save time and reduce writes to EEPROM
- Serial.println(F("EEPROM Successfully Wiped"));
+ for (byte x = 0; x < EEPROM.length(); x++) EEPROM.update(x,0);       //If EEPROM address 0, do nothing, already clear, go to the next address in order to save time and reduce writes to EEPROM
+ Serial.println(F("EEPROM Wiped"));
 }
 ///////////////////////////////////////// Show_EEPROM_Usage (Serial.print) ///////////////////////////////////
 void Show_EEPROM_Usage() {
   
-  Serial.print(F("EEprom.length()= ")); Serial.print(EEPROM.length());Serial.println(F(" bytes"));
-  Serial.print(F("Key card slots in EEPROM (excl.master): ")); Serial.println((EEPROM.length()-6)/4);
-  Serial.print(F("Used: ")); Serial.println(EEPROM.read(0));
-  Serial.print(F("Available: ")); Serial.println((EEPROM.length()-6)/4-EEPROM.read(0));
-  Serial.println(F("----------------"));
+  Serial.print(F("EEprom Size= ")); Serial.print(EEPROM.length());Serial.println(F(" bytes"));
+  Serial.print(F("Total Key card slots avalaible: ")); Serial.println((EEPROM.length()-6)/4); //excluding master
+  Serial.print(F(" Used: ")); Serial.println(EEPROM.read(0));
+  Serial.print(F(" Free: ")); Serial.println((EEPROM.length()-6)/4-EEPROM.read(0));
+  DrawLine();
   }
-  //////////////////////////////////////// FadeLoop (phading LED without delay/////////////////////////////////// 
-void FadeLoop (int GBR,int PulseLength, byte Repeat) { //Led pulsing; GBR is the led ref, PulseLength is the length of a halve cycle, Repeat is 0 = noDelay or >=1 (number of loops before exiting)
+  //////////////////////////////////////// FadeLoop (phading LED without delay)/////////////////////////////////// 
+void FadeLoop (byte GBR,int PulseLength, byte Repeat) { //Led pulsing; GBR is the led ref, PulseLength is the length of a halve cycle, Repeat is 0 = noDelay or >=1 (number of loops before exiting)
  
   static int prevMod=0; 
   static int Mod=0;
   byte Count=0;
   const byte Brightness=200;
   static bool LedToggle=0;
-  int LedValue; //from 0 to 250
-  uint32_t StartMillis=0; 
+  byte LedValue; //from 0 to 250
+  unsigned long StartMillis=0; 
   
   if (Repeat !=0)  //if we have a loop
         {StartMillis=millis();// make sure we do a full increase/fade cycle in case cycle > 0
