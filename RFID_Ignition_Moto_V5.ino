@@ -145,7 +145,8 @@ static boolean programMode = false;  // initialize programming mode to false
                   for (byte i=0;i<2;i++) digitalWrite (LedPinsGBR [i],LOW); //shuts down all Leds
                   digitalWrite(BeepPin, HIGH); //continuous beep to reset arduino
                   while (1)  //Dead end: loop stops here                     
-                      {FadeLoop(2,200,0);
+                      {FadeLoop(2,200,5);
+                      //Setup()?? //reboote?
                       }        
                   }
             Serial.println(F("cancelled"));
@@ -263,9 +264,9 @@ void ShowReaderDetails() { // Get the MFRC522 software version
       }
 }
 //////////////////////////////////////// readID ( Read ID from EEPROM ans store it in storeCard) //////////////////////////////
-void readID( byte number ) {
+void readID( int number ) {
   
-  byte start = (number * 4 ) + 2;    // Figure out starting position
+  int start = (number * 4 ) + 2;    // Figure out starting position
   for ( byte i = 0; i < 4; i++ ) storedCard[i] = EEPROM.read(start + i);   // Loop 4 times to get the 4 Bytes; Assign values read from EEPROM to array
 }
 ///////////////////////////////////////// writeID ( Add ID to EEPROM ) ///////////////////////////////////
@@ -381,8 +382,9 @@ return true;
 ////////////////////////////////////////// Wipe_EEPROM   ///////////////////////////////////
 void Wipe_EEPROM(){
   
- Serial.println(F("Starting Wiping EEPROM"));
- for (byte x = 0; x < EEPROM.length(); x++) EEPROM.update(x,0);       //If EEPROM address 0, do nothing, already clear, go to the next address in order to save time and reduce writes to EEPROM
+ Serial.print(F("Starting Wiping EEPROM; length="));
+ Serial.println(EEPROM.length());
+ for (int x = 0; x < EEPROM.length(); x++) EEPROM.update(x,0); //If EEPROM address 0, do nothing, already clear, go to the next address in order to save time and reduce writes to EEPROM
  Serial.println(F("EEPROM Wiped"));
 }
 ///////////////////////////////////////// Show_EEPROM_Usage (Serial.print) ///////////////////////////////////
