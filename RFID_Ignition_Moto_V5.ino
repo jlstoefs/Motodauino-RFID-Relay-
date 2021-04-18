@@ -264,7 +264,7 @@ void ShowReaderDetails() { // Get the MFRC522 software version
       }
 }
 //////////////////////////////////////// readID ( Read ID from EEPROM ans store it in storeCard) //////////////////////////////
-void readID( int number ) {
+void readID( byte number ) {
   
   int start = (number * 4 ) + 2;    // Figure out starting position
   for ( byte i = 0; i < 4; i++ ) storedCard[i] = EEPROM.read(start + i);   // Loop 4 times to get the 4 Bytes; Assign values read from EEPROM to array
@@ -273,7 +273,7 @@ void readID( int number ) {
 void writeID( byte a[] ) {
   
         byte num = EEPROM.read(0);     // Get the numer of used spaces, position 0 stores the number of ID cards
-        byte startbyte = ( num * 4 ) + 6;  // Figure out where the next slot starts
+        int startbyte = ( num * 4 ) + 6;  // Figure out where the next slot starts
         num++;
         EEPROM.update( 0, num );     //  Increment the counter by one & Write the new count to the counter
         for ( byte j = 0; j < 4; j++ ) EEPROM.update( startbyte + j, a[j] );  // Write the array values to EEPROM in the right position
@@ -296,8 +296,8 @@ void deleteID( byte a[] ) {
   
         byte num = EEPROM.read(0);   // Get the total number of Key cards, stored in EEPROM position 0
         byte slot= findIDSLOT( a );      // Figure out the slot number of the card  
-        const byte looping = ((num - slot) * 4); // the number of bytes used to store Key cards located in EEPROM AFTER the card to be deleted, and which will need to be shifted by 4 bytes 
-        byte startByte = ( (slot-1) * 4 ) + 6;      // first EEPROM location of card to be deleted
+        const int looping = ((num - slot) * 4); // the number of bytes used to store Key cards located in EEPROM AFTER the card to be deleted, and which will need to be shifted by 4 bytes 
+        int startByte = ( (slot-1) * 4 ) + 6;      // first EEPROM location of card to be deleted
         for (byte i=0;i<2;i++) digitalWrite (LedPinsGBR [i],LOW); //Shuts down leds Green & Blue
         EEPROM.update( 0, num-1 );   // Write the new nbr of Key cards (i.e. old nbr-1) in EEPROM 0
         for ( byte k = 0; k < 4; k++ )                                              //JL code: only shift location between card to be deleted and the last Key card in the EEPROM
@@ -325,7 +325,7 @@ boolean match = false;          // initialize card match to false
  if ( match ) return true;        // Check to see if if match is still true
  else return false;
 }
-///////////////////////////////////////// findIDSLOT (returns int)  ///////////////////////////////////
+///////////////////////////////////////// findIDSLOT (returns byte)  ///////////////////////////////////
 byte findIDSLOT( byte find[] ) {
   
  byte count = EEPROM.read(0);       // Reads the number of Key cards in EEPROM 0
@@ -363,7 +363,7 @@ static int prevModulo=0;
 const int freq=500;
 int Ledfreq=freq;
 byte CountDown=interval/freq; //printing CountDown to reset
-uint32_t now = millis();
+unsigned long now =millis();
 while (millis() - now < interval)  
         {if(millis() - now > interval/2) Ledfreq=freq/4; // clignotte 4x plus vite dans la seconde moitié
         prevModulo=Modulo;
